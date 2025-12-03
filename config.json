@@ -1,0 +1,10 @@
+{
+  "port": 3000,
+  "timestampToleranceSecs": 30,
+  "serverClockSkewSecs": 5,
+  "maxSpeedCmPerSec": 20,
+  "packetBurstRatePerDevice": 50,
+  "hopCost": 1,
+  "baseCost": 1,
+  "evilApenalty": 1000
+}

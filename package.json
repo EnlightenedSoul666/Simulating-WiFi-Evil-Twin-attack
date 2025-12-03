@@ -1,0 +1,28 @@
+{
+  "name": "secure-wifi-simulator",
+  "version": "1.0.0",
+  "description": "Real-time Wi-Fi security simulator demonstrating Evil Twin attack defense with cryptographic signatures",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "wifi",
+    "security",
+    "cryptography",
+    "evil-twin",
+    "ed25519",
+    "x25519",
+    "simulation"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
