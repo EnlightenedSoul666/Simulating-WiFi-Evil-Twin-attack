@@ -1,0 +1,682 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Game Theory Security Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body{
+      background: linear-gradient(135deg, #0a1628 0%, #071021 100%);
+      color:#dcecff;
+      font-family: Inter, system-ui, Arial;
+      margin:0;
+      padding:20px;
+      min-height: 100vh;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    h1{
+      margin:0;
+      font-size:32px;
+      font-weight:700;
+      background: linear-gradient(90deg, #ff5252, #ff9800, #64b5f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle{
+      color:#9db0c7;
+      font-size:13px;
+      margin-top:6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
+      background: rgba(11,23,36,0.8);
+      border: 1px solid rgba(100,181,246,0.2);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.3s;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(100,181,246,0.4);
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: #9db0c7;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .metric-value.good { color: #81c784; }
+    .metric-value.bad { color: #ff5252; }
+    .metric-value.neutral { color: #64b5f6; }
+    .metric-value.warning { color: #ff9800; }
+
+    .metric-change {
+      font-size: 11px;
+      color: #7a8a9f;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .explanation-box {
+      background: rgba(100,181,246,0.1);
+      border-left: 4px solid #64b5f6;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .explanation-title {
+      font-weight: 600;
+      color: #64b5f6;
+      margin-bottom: 6px;
+    }
+
+    .payoff-matrix {
+      background: rgba(11,23,36,0.7);
+      border: 1px solid rgba(255,152,0,0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .payoff-matrix h3 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      color: #ff9800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .matrix-grid {
+      display: grid;
+      grid-template-columns: 120px repeat(2, 1fr);
+      gap: 1px;
+      background: rgba(100,181,246,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 12px;
+    }
+
+    .matrix-cell {
+      background: rgba(11,23,36,0.9);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .matrix-header {
+      background: rgba(100,181,246,0.15);
+      font-weight: 600;
+      color: #64b5f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+
+    .payoff-device {
+      color: #81c784;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .payoff-ap {
+      color: #ff5252;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .payoff-cost {
+      color: #ff9800;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+
+    .detector-panel {
+      background: rgba(11,23,36,0.7);
+      border: 1px solid rgba(100,181,246,0.15);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .detector-panel h3 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      color: #64b5f6;
+    }
+
+    .detector-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 12px;
+    }
+
+    .detector-item {
+      background: rgba(14,34,56,0.6);
+      border-left: 3px solid #64b5f6;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .detector-item.evil-detected {
+      border-left-color: #ff5252;
+      background: rgba(255,82,82,0.1);
+    }
+
+    .detector-item.legitimate {
+      border-left-color: #81c784;
+    }
+
+    .detector-name {
+      font-weight: 600;
+      margin-bottom: 6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .detector-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+      color: #9db0c7;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .prob-bar {
+      height: 6px;
+      background: rgba(100,181,246,0.2);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .prob-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #81c784, #ff9800, #ff5252);
+      transition: width 0.3s;
+    }
+
+    .chart-container{
+      background: rgba(11,23,36,0.7);
+      border: 1px solid rgba(100,181,246,0.15);
+      border-radius:12px;
+      padding:20px;
+      margin-bottom:20px;
+    }
+
+    .chart-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #64b5f6;
+      margin-bottom: 16px;
+    }
+
+    canvas{
+      max-height: 280px;
+    }
+
+    .alert {
+      background: rgba(255,82,82,0.15);
+      border-left: 4px solid #ff5252;
+      padding: 14px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .alert-title {
+      font-weight: 600;
+      color: #ff5252;
+      margin-bottom: 4px;
+    }
+
+    .btn {
+      background: rgba(30,122,255,0.9);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: rgba(30,122,255,1);
+      transform: translateY(-1px);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .live-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #ff5252;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 1.5s infinite;
+    }
+
+    .live-indicator.safe {
+      background: #81c784;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>🎮 Game Theory Security Dashboard</h1>
+      <div class="subtitle">
+        <span class="live-indicator" id="threatIndicator"></span>
+        Nash Equilibrium Analysis • Bayesian Inference • Continuous Guest AP Spawning
+      </div>
+    </div>
+    <div>
+      <button class="btn" onclick="resetData()">🔄 Reset</button>
+      <button class="btn" onclick="exportData()">📊 Export</button>
+      <span id="modePill" style="margin-left:12px;padding:8px 10px;background:#0d1b2a;border-radius:8px;border:1px solid #1e3a5f">Mode: —</span>
+    </div>
+  </div>
+
+  <div id="attackAlert" class="alert" style="display:none;">
+    <div class="alert-title">🚨 ACTIVE ATTACK DETECTED</div>
+    <div id="alertMessage">Evil AP spawned! Bayesian detectors analyzing...</div>
+  </div>
+
+  <div class="explanation-box">
+    <div class="explanation-title">💡 Understanding the Metrics</div>
+    <div>
+      <strong>Guest APs:</strong> 4 spawn every 15s continuously. 90% are good, 10% are evil. System learns to avoid evil ones.<br>
+      <strong>Spawned/Detected:</strong> Shows "Total evil spawned / Successfully detected". Detection happens when P(evil) > 20%.<br>
+      <strong>Avoided APs:</strong> Evil APs detected and blacklisted - no packets sent, causing load redistribution to legitimate APs.<br>
+      <strong>Cost Growth:</strong> When evil APs avoided, remaining legitimate APs handle more traffic → higher load → increased cost.
+    </div>
+  </div>
+
+  <div class="dashboard">
+    <div class="metric-card">
+      <div class="metric-label">Active Evil APs</div>
+      <div class="metric-value bad" id="activeEvil">0</div>
+      <div class="metric-change">Currently attacking</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Active Guest APs</div>
+      <div class="metric-value neutral" id="activeGuests">0</div>
+      <div class="metric-change">Spawning continuously</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Avoided Evil APs</div>
+      <div class="metric-value warning" id="avoidedCount">0</div>
+      <div class="metric-change">Blacklisted after detection</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Guest Spawned (Total)</div>
+      <div class="metric-value neutral" id="guestSpawned">0</div>
+      <div class="metric-change">Good + Evil combined</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Evil Spawned / Detected</div>
+      <div class="metric-value warning" id="spawnDetect">0 / 0</div>
+      <div class="metric-change">Detection accuracy</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Total Packets Sent</div>
+      <div class="metric-value neutral" id="totalPackets">0</div>
+      <div class="metric-change">All devices</div>
+    </div>
+  </div>
+
+  <div class="payoff-matrix">
+    <h3>⚔️ Strategic Payoff Matrix (Updated for High-Damage Evil APs)</h3>
+    <div class="matrix-grid">
+      <div class="matrix-header"></div>
+      <div class="matrix-header">AP COOPERATE<br/>(Legitimate)</div>
+      <div class="matrix-header">AP DEFECT<br/>(Evil Twin)</div>
+
+      <div class="matrix-header">Device<br/>TRUST</div>
+      <div class="matrix-cell">
+        <span class="payoff-device">Device: +10</span>
+        <span class="payoff-ap">AP: +5</span>
+        <span class="payoff-cost">Cost: 1.0</span>
+      </div>
+      <div class="matrix-cell">
+        <span class="payoff-device">Device: -50 💀</span>
+        <span class="payoff-ap">AP: +40</span>
+        <span class="payoff-cost">Cost: 15.0</span>
+      </div>
+
+      <div class="matrix-header">Device<br/>VERIFY</div>
+      <div class="matrix-cell">
+        <span class="payoff-device">Device: +8</span>
+        <span class="payoff-ap">AP: +4</span>
+        <span class="payoff-cost">Cost: 1.8</span>
+      </div>
+      <div class="matrix-cell">
+        <span class="payoff-device">Device: -5 🛡️</span>
+        <span class="payoff-ap">AP: -10</span>
+        <span class="payoff-cost">Cost: 8.0</span>
+      </div>
+
+      <div class="matrix-header">Device<br/>AVOID</div>
+      <div class="matrix-cell">
+        <span class="payoff-device">Device: +3</span>
+        <span class="payoff-ap">AP: -2</span>
+        <span class="payoff-cost">Cost: 3.2</span>
+      </div>
+      <div class="matrix-cell">
+        <span class="payoff-device">Device: +5</span>
+        <span class="payoff-ap">AP: -5</span>
+        <span class="payoff-cost">Cost: 4.0</span>
+      </div>
+    </div>
+    <div style="margin-top:12px; font-size:11px; color:#9db0c7;">
+      <strong>TRUST:</strong> Low overhead but vulnerable to evil APs (device: -50, cost: 15.0)<br>
+      <strong>VERIFY:</strong> Cryptographic protection - still takes damage from evil but much less (device: -5, cost: 8.0)<br>
+      <strong>AVOID:</strong> Skip detected evil APs entirely, redistribute load to legitimate APs
+    </div>
+  </div>
+
+  <div class="detector-panel">
+    <h3>🔍 Bayesian AP Detectors (Real-time Inference)</h3>
+    <div class="detector-list" id="detectorList"></div>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-title">Cost by Strategy (30s windows) <span id="dataPill" style="margin-left:12px;padding:8px 10px;background:#0d1b2a;border-radius:8px;border:1px solid #1e3a5f">Data: Non-sensitive</span> <button id="sensToggle" style="float:right; font-size:12px; padding:4px 8px; border-radius:6px; background:#1f3b57; color:#dcecff; border:1px solid #315a7e;">Mode: Non-sensitive</button></div>
+    <canvas id="strategyChart"></canvas>
+  </div>
+
+  <script>
+  (function(){
+    // Socket
+    const socket = (typeof io === 'function') ? io() : { on: () => {} };
+
+    // UI elements and history
+    const dataPill = document.getElementById('dataPill');
+    const labels = [];
+    const maxPoints = 60;
+    let dataHistory = [];
+    const detectorHistory = new Map();
+
+    // Chart config
+    const chartConfig = {
+      responsive: true,
+      maintainAspectRatio: true,
+      animation: { duration: 0 },
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: '#dcecff', font: { size: 12, weight: '600' } }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#9db0c7', font: { size: 10 } },
+          grid: { color: 'rgba(100,160,220,0.08)' }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#9db0c7', font: { size: 11 } },
+          grid: { color: 'rgba(100,160,220,0.08)' }
+        }
+      }
+    };
+
+    // Per-strategy cumulative cost chart
+    const ctx = document.getElementById('strategyChart').getContext('2d');
+    const strategyChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'TRUST cost', data: [], borderWidth: 2, tension: 0.35 },
+          { label: 'VERIFY cost', data: [], borderWidth: 2, tension: 0.35 },
+          { label: 'AVOID cost', data: [], borderWidth: 2, tension: 0.35 }
+        ]
+      },
+      options: chartConfig
+    });
+
+    // Update metrics UI
+    function updateMetrics(s = {}) {
+      const activeEvil = s.activeEvilAPs || 0;
+      const activeGuests = s.activeGuestAPs || 0;
+      document.getElementById('activeEvil').textContent = activeEvil;
+      document.getElementById('activeGuests').textContent = activeGuests;
+      document.getElementById('avoidedCount').textContent = s.avoidedAPsCount || 0;
+      document.getElementById('guestSpawned').textContent = s.guestAPsSpawned || 0;
+      document.getElementById('spawnDetect').textContent =
+        `${s.evilGuestAPsSpawned || 0} / ${s.evilAPsDetectedCorrectly || 0}`;
+      document.getElementById('totalPackets').textContent = s.totalSent || 0;
+
+      const indicator = document.getElementById('threatIndicator');
+      if (activeEvil > 0) {
+        indicator.classList.remove('safe');
+        document.getElementById('attackAlert').style.display = 'block';
+        document.getElementById('alertMessage').textContent =
+          `${activeEvil} evil AP(s) active! ${s.avoidedAPsCount || 0} avoided. Load shifting to legitimate APs...`;
+      } else {
+        indicator.classList.add('safe');
+        document.getElementById('attackAlert').style.display = 'none';
+      }
+
+      updateDetectorList(s.detectors || {});
+    }
+
+    // Render detectors
+    function updateDetectorList(detectors) {
+      const list = document.getElementById('detectorList');
+      list.innerHTML = '';
+
+      for (const [bssid, detector] of Object.entries(detectors)) {
+        const div = document.createElement('div');
+        div.className = 'detector-item';
+
+        const posterior = typeof detector.posteriorEvil === 'number' ? detector.posteriorEvil : 0;
+        const confidence = typeof detector.confidence === 'number' ? detector.confidence : 0;
+        const obs = detector.observationCount || 0;
+
+        if (detector.isLikelyEvil || posterior >= 0.2) {
+          if (detector.isLikelyEvil) div.classList.add('evil-detected');
+          else if (posterior < 0.2) div.classList.add('legitimate');
+        } else {
+          if (posterior < 0.2) div.classList.add('legitimate');
+        }
+
+        div.innerHTML = `
+          <div class="detector-name">${String(bssid).slice(0, 20)}${String(bssid).length > 20 ? '...' : ''}</div>
+          <div class="detector-stats">
+            <div>P(Evil|obs) = ${(posterior * 100).toFixed(1)}%</div>
+            <div>Confidence: ${(confidence * 100).toFixed(0)}%</div>
+            <div>Observations: ${obs}</div>
+          </div>
+          <div class="prob-bar">
+            <div class="prob-fill" style="width: ${Math.min(100, Math.max(0, posterior * 100))}%"></div>
+          </div>
+        `;
+
+        list.appendChild(div);
+
+        if (!detectorHistory.has(bssid)) {
+          detectorHistory.set(bssid, []);
+        }
+      }
+    }
+
+    // Socket handler
+    socket.on('stats', s => {
+      if (!s) return;
+
+      if (s.dataSensitivity && dataPill) {
+        dataPill.textContent = `Data: ${s.dataSensitivity === 'sensitive' ? 'Sensitive' : 'Non-sensitive'}`;
+      }
+
+      const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+      labels.push(t);
+      if (labels.length > maxPoints) labels.shift();
+
+      // Update per-mode costs in chart if present
+      if (s.perMode) {
+        const pm = s.perMode;
+        strategyChart.data.datasets[0].data.push(pm.TRUST ? pm.TRUST.cost : 0);
+        strategyChart.data.datasets[1].data.push(pm.VERIFY ? pm.VERIFY.cost : 0);
+        strategyChart.data.datasets[2].data.push(pm.AVOID ? pm.AVOID.cost : 0);
+
+        strategyChart.data.labels = labels;
+        if (labels.length > maxPoints) {
+          strategyChart.data.datasets.forEach(d => {
+            if (d.data.length > maxPoints) d.data.shift();
+          });
+        }
+        strategyChart.update('none');
+      }
+
+      // Mode pill
+      if (s.activeStrategy && s.modeEndsAt) {
+        const secsLeft = Math.max(0, Math.round((s.modeEndsAt - Date.now())/1000));
+        const pill = document.getElementById('modePill');
+        if (pill) pill.textContent = `Mode: ${s.activeStrategy} (${secsLeft}s left)`;
+      }
+
+      updateMetrics(s);
+
+      // store snapshot for export
+      dataHistory.push({
+        time: t,
+        snapshot: s
+      });
+
+      // limit dataHistory to reasonable size
+      if (dataHistory.length > 10000) dataHistory.shift();
+    });
+
+    // Reset function
+    window.resetData = function() {
+      if (!confirm('Reset all data?')) return;
+      labels.length = 0;
+      dataHistory = [];
+      detectorHistory.clear();
+      // clear chart datasets
+      strategyChart.data.labels = labels;
+      strategyChart.data.datasets.forEach(d => d.data = []);
+      strategyChart.update();
+      // reset UI
+      document.getElementById('activeEvil').textContent = 0;
+      document.getElementById('activeGuests').textContent = 0;
+      document.getElementById('avoidedCount').textContent = 0;
+      document.getElementById('guestSpawned').textContent = 0;
+      document.getElementById('spawnDetect').textContent = '0 / 0';
+      document.getElementById('totalPackets').textContent = 0;
+      document.getElementById('attackAlert').style.display = 'none';
+      document.getElementById('detectorList').innerHTML = '';
+    };
+
+    // Export function - creates a CSV with key fields and per-mode costs when available
+    window.exportData = function() {
+      if (!dataHistory.length) {
+        alert('No data to export.');
+        return;
+      }
+
+      const headers = [
+        'Time',
+        'activeEvilAPs',
+        'activeGuestAPs',
+        'avoidedAPsCount',
+        'guestAPsSpawned',
+        'evilGuestAPsSpawned',
+        'evilAPsDetectedCorrectly',
+        'totalSent',
+        'TRUST_cost',
+        'VERIFY_cost',
+        'AVOID_cost'
+      ];
+      let csv = headers.join(',') + '\n';
+
+      dataHistory.forEach(entry => {
+        const s = entry.snapshot || {};
+        const pm = s.perMode || {};
+        const tc = pm.TRUST ? pm.TRUST.cost : '';
+        const vc = pm.VERIFY ? pm.VERIFY.cost : '';
+        const ac = pm.AVOID ? pm.AVOID.cost : '';
+        const row = [
+          entry.time || '',
+          s.activeEvilAPs ?? '',
+          s.activeGuestAPs ?? '',
+          s.avoidedAPsCount ?? '',
+          s.guestAPsSpawned ?? '',
+          s.evilGuestAPsSpawned ?? '',
+          s.evilAPsDetectedCorrectly ?? '',
+          s.totalSent ?? '',
+          tc,
+          vc,
+          ac
+        ];
+        csv += row.join(',') + '\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `game_theory_analysis_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    };
+
+    // initial safe indicator
+    document.getElementById('threatIndicator').classList.add('safe');
+
+  })();
+  </script>
+</body>
+</html>
